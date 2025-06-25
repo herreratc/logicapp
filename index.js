@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 const express = require('express');
 const fs = require('fs');
 const csv = require('csv-parser');
@@ -135,3 +136,13 @@ app.get('/produtos', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ API rodando em http://localhost:${PORT}`);
 });
+=======
+import { registerRootComponent } from 'expo';
+
+import App from './App';
+
+// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
+// It also ensures that whether you load the app in Expo Go or in a native build,
+// the environment is set up appropriately
+registerRootComponent(App);
+>>>>>>> dc1feac (1.0.1)
