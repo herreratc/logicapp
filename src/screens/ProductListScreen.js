@@ -3,17 +3,19 @@ import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Activity
 import axios from 'axios';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
+import { useNavigation } from '@react-navigation/native';
 
 export default function ProductListScreen() {
   const [produtos, setProdutos] = useState([]);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
   const [dataInicio, setDataInicio] = useState(null);
-  const [dataFim, setDataFim] = useState(null);
+  const [dataFim, setDataFim] = useState(new Date());
   const [mostrandoCalendario, setMostrandoCalendario] = useState(null);
   const [ordenacao, setOrdenacao] = useState('alfabetica');
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
   const [favoritos, setFavoritos] = useState([]);
+  const navigation = useNavigation();
 
   useEffect(() => {
     carregarProdutos();
@@ -70,6 +72,12 @@ export default function ProductListScreen() {
           <Text style={styles.preco}>Venda: R$ {item.precoVenda.toFixed(2)}</Text>
           <Text style={[styles.variacao, { color: corMarkup }]}>Markup: {item.markup.toFixed(2)}%</Text>
           <Text style={[styles.variacao, { color: corMargem }]}>Margem: {item.margemLucro.toFixed(2)}%</Text>
+          <TouchableOpacity
+            style={styles.detalhesButton}
+            onPress={() => navigation.navigate('Detalhes', { produto: item, dataInicioGlobal: dataInicio, dataFimGlobal: dataFim })}
+          >
+            <Text style={styles.detalhesText}>🔍</Text>
+          </TouchableOpacity>
         </View>
         <TouchableOpacity
           style={styles.favorito}
@@ -80,8 +88,6 @@ export default function ProductListScreen() {
       </View>
     );
   };
-
-  if (loading) return <ActivityIndicator size="large" color="#2196f3" style={{ flex: 1, justifyContent: 'center' }} />;
 
   return (
     <View style={styles.container}>
@@ -112,55 +118,58 @@ export default function ProductListScreen() {
       </View>
 
       {mostrandoCalendario && (
-        <View style={styles.calendarioContainer}>
-          <Text style={{ color: '#fff', marginBottom: 5, textAlign: 'center' }}>
-            {mostrandoCalendario === 'inicio' ? 'Selecionar Data Início' : 'Selecionar Data Fim'}
-          </Text>
-          <DateTimePicker
-            value={(mostrandoCalendario === 'inicio' ? dataInicio : dataFim) || new Date()}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            themeVariant="dark"
-            onChange={(event, selectedDate) => {
-              if (selectedDate) {
-                if (mostrandoCalendario === 'inicio') setDataInicio(selectedDate);
-                else setDataFim(selectedDate);
-              }
-            }}
-          />
-
-          <View style={styles.atalhosRow}>
-            <TouchableOpacity
-              style={styles.atalho}
-              onPress={() => {
-                const hoje = new Date();
-                const inicio = new Date();
-                inicio.setDate(inicio.getDate() - 7);
-                setDataInicio(inicio);
-                setDataFim(hoje);
+        <TouchableOpacity
+          activeOpacity={1}
+          onPressOut={() => setMostrandoCalendario(null)}
+          style={styles.overlay}
+        >
+          <View style={styles.calendarioContainer}>
+            <Text style={{ color: '#fff', marginBottom: 5, textAlign: 'center' }}>
+              {mostrandoCalendario === 'inicio' ? 'Selecionar Data Início' : 'Selecionar Data Fim'}
+            </Text>
+            <DateTimePicker
+              value={(mostrandoCalendario === 'inicio' ? dataInicio : dataFim) || new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              themeVariant="dark"
+              onChange={(event, selectedDate) => {
+                if (selectedDate) {
+                  mostrandoCalendario === 'inicio' ? setDataInicio(selectedDate) : setDataFim(selectedDate);
+                }
               }}
-            >
-              <Text style={styles.dateText}>🗓️ 7 dias</Text>
-            </TouchableOpacity>
+            />
 
-            <TouchableOpacity
-              style={styles.atalho}
-              onPress={() => {
-                const hoje = new Date();
-                const inicio = new Date();
-                inicio.setDate(inicio.getDate() - 30);
-                setDataInicio(inicio);
-                setDataFim(hoje);
-              }}
-            >
-              <Text style={styles.dateText}>🗓️ 30 dias</Text>
-            </TouchableOpacity>
+            <View style={styles.atalhosRow}>
+              <TouchableOpacity
+                style={styles.atalho}
+                onPress={() => {
+                  const hoje = new Date();
+                  const inicio = new Date();
+                  inicio.setDate(inicio.getDate() - 7);
+                  setDataInicio(inicio);
+                  setDataFim(hoje);
+                  setMostrandoCalendario(null);
+                }}
+              >
+                <Text style={styles.dateText}>🗓️ 7 dias</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.atalho}
+                onPress={() => {
+                  const hoje = new Date();
+                  const inicio = new Date();
+                  inicio.setDate(inicio.getDate() - 30);
+                  setDataInicio(inicio);
+                  setDataFim(hoje);
+                  setMostrandoCalendario(null);
+                }}
+              >
+                <Text style={styles.dateText}>🗓️ 30 dias</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <TouchableOpacity onPress={() => setMostrandoCalendario(null)} style={styles.okButton}>
-            <Text style={{ color: '#fff', fontWeight: 'bold' }}>OK</Text>
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       )}
 
       <View style={styles.filterContainer}>
@@ -183,14 +192,36 @@ export default function ProductListScreen() {
         renderItem={renderItem}
         keyExtractor={(item) => item.key}
       />
+
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingBackground} />
+          <ActivityIndicator size="large" color="#2196f3" style={styles.loadingIndicator} />
+        </View>
+      )}     
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121e2d', padding: 10 },
-  header: { padding: 16, alignItems: 'center', backgroundColor: '#1f2c40', marginBottom: 10, borderRadius: 8 },
+  header: {
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1f2c40',
+    marginBottom: 10,
+    borderRadius: 8,
+  },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  logo: {
+    width: 40,
+    height: 40,
+    resizeMode: 'contain',
+  },
   input: {
     backgroundColor: '#1f2c40',
     color: '#fff',
@@ -214,11 +245,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   dateText: { color: '#fff', textAlign: 'center' },
+  overlay: {
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
   calendarioContainer: {
     backgroundColor: '#1f2c40',
     padding: 10,
     borderRadius: 10,
     marginBottom: 10,
+    width: '90%',
   },
   atalhosRow: {
     flexDirection: 'row',
@@ -231,13 +271,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     flex: 1,
     marginHorizontal: 5,
-  },
-  okButton: {
-    marginTop: 10,
-    backgroundColor: '#2e3e55',
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'center',
   },
   filterContainer: {
     flexDirection: 'row',
@@ -269,4 +302,37 @@ const styles = StyleSheet.create({
   preco: { fontSize: 14, color: '#eee' },
   variacao: { fontSize: 14, fontWeight: 'bold' },
   favorito: { position: 'absolute', bottom: 8, right: 10 },
+  detalhesButton: {
+    marginTop: 8,
+    backgroundColor: '#2e3e55',
+    padding: 6,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 999,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingBackground: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    loadingIndicator: {
+      zIndex: 1000,
+    },
+  detalhesText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
 });
