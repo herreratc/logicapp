@@ -1,5 +1,5 @@
 import axios from 'axios';
 
 export default axios.create({
-  baseURL: 'http://18.191.171.80:3000', // <- API pública rodando na EC2
+  baseURL: 'https://18.191.171.80.sslip.io:3000', // <- API pública rodando na EC2
 });

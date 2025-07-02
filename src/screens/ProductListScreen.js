@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import {
+  View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet,
+  Platform, Animated, Easing
+} from 'react-native';
 import axios from 'axios';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import LottieView from 'lottie-react-native';
+
+import loadingAnim from '../../assets/animations/loading.json';
+import logo from '../../assets/logo.png';
+import userIcon from '../../assets/icons/user.png';
 
 export default function ProductListScreen() {
   const [produtos, setProdutos] = useState([]);
@@ -15,11 +24,44 @@ export default function ProductListScreen() {
   const [ordenacao, setOrdenacao] = useState('alfabetica');
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
   const [favoritos, setFavoritos] = useState([]);
+  const [usuario, setUsuario] = useState('');
+
   const navigation = useNavigation();
+  const logoAnim = useState(new Animated.Value(0))[0];
+  const userAnim = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
     carregarProdutos();
+    obterUsuarioSalvo();
   }, [dataInicio, dataFim]);
+
+  useEffect(() => {
+    Animated.timing(logoAnim, {
+      toValue: 1,
+      duration: 800,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+    Animated.timing(userAnim, {
+      toValue: 1,
+      duration: 1000,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const obterUsuarioSalvo = async () => {
+    const nomeSalvo = await AsyncStorage.getItem('usuarioSalvo');
+    if (nomeSalvo) {
+      const nomeFormatado = nomeSalvo.charAt(0).toUpperCase() + nomeSalvo.slice(1);
+      setUsuario(nomeFormatado);
+    }
+  };
+
+  const sair = async () => {
+    await AsyncStorage.removeItem('usuarioSalvo');
+    navigation.replace('Splash');
+  };
 
   const carregarProdutos = () => {
     setLoading(true);
@@ -29,7 +71,7 @@ export default function ProductListScreen() {
       params.dataFim = format(dataFim, 'dd.MM.yyyy');
     }
 
-    axios.get('http://18.191.171.80:3000/produtos', { params })
+    axios.get('https://api.apilogicapp.lol/produtos', { params })
       .then(response => setProdutos(response.data))
       .catch(error => console.error('Erro ao carregar produtos:', error))
       .finally(() => setLoading(false));
@@ -74,7 +116,13 @@ export default function ProductListScreen() {
           <Text style={[styles.variacao, { color: corMargem }]}>Margem: {item.margemLucro.toFixed(2)}%</Text>
           <TouchableOpacity
             style={styles.detalhesButton}
-            onPress={() => navigation.navigate('Detalhes', { produto: item, dataInicioGlobal: dataInicio, dataFimGlobal: dataFim })}
+            onPress={() =>
+              navigation.navigate('Detalhes', {
+                produto: item,
+                dataInicioGlobal: dataInicio ? format(dataInicio, 'yyyy-MM-dd') : null,
+                dataFimGlobal: dataFim ? format(dataFim, 'yyyy-MM-dd') : null,
+              })
+            }
           >
             <Text style={styles.detalhesText}>🔍</Text>
           </TouchableOpacity>
@@ -92,7 +140,17 @@ export default function ProductListScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Produtos Lógica</Text>
+        <View style={styles.logoArea}>
+          <Animated.Image source={logo} style={[styles.logo, { opacity: logoAnim }]} resizeMode="contain" />
+          <Animated.Text style={[styles.logoTexto, { opacity: logoAnim }]}>LÓGICA DISTRIBUIÇÃO</Animated.Text>
+        </View>
+        <View style={styles.usuarioArea}>
+          <Animated.Image source={userIcon} style={[styles.userIcon, { opacity: userAnim }]} resizeMode="contain" />
+          <Text style={styles.usuarioNome}>{usuario}</Text>
+          <TouchableOpacity onPress={sair} style={{ marginTop: 4 }}>
+            <Text style={styles.logoutText}>Sair</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <TextInput
@@ -109,7 +167,6 @@ export default function ProductListScreen() {
             {dataInicio ? format(dataInicio, 'dd/MM/yyyy') : 'Data Início'}
           </Text>
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.dateButton} onPress={() => setMostrandoCalendario('fim')}>
           <Text style={styles.dateText}>
             {dataFim ? format(dataFim, 'dd/MM/yyyy') : 'Data Fim'}
@@ -133,12 +190,18 @@ export default function ProductListScreen() {
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               themeVariant="dark"
               onChange={(event, selectedDate) => {
-                if (selectedDate) {
-                  mostrandoCalendario === 'inicio' ? setDataInicio(selectedDate) : setDataFim(selectedDate);
+                if (event.type === 'set' && selectedDate) {
+                  if (mostrandoCalendario === 'inicio') {
+                    setDataInicio(selectedDate);
+                  } else {
+                    setDataFim(selectedDate);
+                  }
+                  setMostrandoCalendario(null); // Fecha após confirmação
+                } else {
+                  setMostrandoCalendario(null); // Fecha se cancelar
                 }
               }}
             />
-
             <View style={styles.atalhosRow}>
               <TouchableOpacity
                 style={styles.atalho}
@@ -153,7 +216,6 @@ export default function ProductListScreen() {
               >
                 <Text style={styles.dateText}>🗓️ 7 dias</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.atalho}
                 onPress={() => {
@@ -183,8 +245,10 @@ export default function ProductListScreen() {
           <Text style={styles.filterText}>Menor Margem</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setMostrarFavoritos(!mostrarFavoritos)} style={styles.filterButton}>
-          <Text style={styles.filterText}>{mostrarFavoritos ? '⭐ Favoritos' : '⭐'}</Text>
+          <Text style={styles.filterText}>⭐</Text>
         </TouchableOpacity>
+
+
       </View>
 
       <FlatList
@@ -196,9 +260,14 @@ export default function ProductListScreen() {
       {loading && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingBackground} />
-          <ActivityIndicator size="large" color="#2196f3" style={styles.loadingIndicator} />
+          <LottieView
+            source={loadingAnim}
+            autoPlay
+            loop
+            style={{ width: 120, height: 120 }}
+          />
         </View>
-      )}     
+      )}
     </View>
   );
 }
@@ -216,12 +285,38 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 8,
   },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  logo: {
-    width: 40,
-    height: 40,
-    resizeMode: 'contain',
+  logoArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
+  logo: {
+    width: 32,
+    height: 32,
+    marginRight: 8,
+  },
+  logoTexto: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  usuarioArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 4, 
+  },
+
+  userIcon: {
+    width: 22,
+    height: 22,
+  },
+  usuarioNome: {
+    fontSize: 10,
+    color: '#ccc',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  logoutText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   input: {
     backgroundColor: '#1f2c40',
     color: '#fff',
@@ -313,26 +408,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center'
   },
-  loadingOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      zIndex: 999,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    loadingBackground: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-    },
-    loadingIndicator: {
-      zIndex: 1000,
-    },
   detalhesText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
 });

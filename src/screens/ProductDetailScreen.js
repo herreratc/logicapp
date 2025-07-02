@@ -1,15 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import {
+  SafeAreaView, View, Text, FlatList, TouchableOpacity, StyleSheet,
+  Platform, TextInput, StatusBar
+} from 'react-native';
 import axios from 'axios';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
+import LottieView from 'lottie-react-native';
+import loadingAnim from '../../assets/animations/loading.json'; // ajuste o caminho se necessário
 
 export default function ProductDetailScreen({ route, navigation }) {
-  const { produto, dataInicio, dataFim } = route.params;
+  const { produto, dataInicioGlobal, dataFimGlobal } = route.params;
 
-  const [inicio, setInicio] = useState(dataInicio);
-  const [fim, setFim] = useState(dataFim);
+  const parseData = (data) => {
+    if (!data) return null;
+    const d = typeof data === 'string' ? parseISO(data) : data;
+    return isValid(d) ? d : null;
+  };
+
+  const [inicio, setInicio] = useState(parseData(dataInicioGlobal));
+  const [fim, setFim] = useState(parseData(dataFimGlobal));
   const [notasFiscais, setNotasFiscais] = useState([]);
+  const [notasFiltradas, setNotasFiltradas] = useState([]);
+  const [buscaNF, setBuscaNF] = useState('');
   const [loading, setLoading] = useState(false);
   const [mostrandoCalendario, setMostrandoCalendario] = useState(null);
 
@@ -17,15 +30,31 @@ export default function ProductDetailScreen({ route, navigation }) {
     if (inicio && fim) buscarNotas();
   }, [inicio, fim]);
 
+  useEffect(() => {
+    if (buscaNF.trim() === '') {
+      setNotasFiltradas(notasFiscais);
+    } else {
+      const termo = buscaNF.trim().toLowerCase();
+      const filtradas = notasFiscais.filter(nf =>
+        nf.nfNumero.toString().toLowerCase().includes(termo)
+      );
+      setNotasFiltradas(filtradas);
+    }
+  }, [buscaNF, notasFiscais]);
+
   const buscarNotas = () => {
     setLoading(true);
-    axios.get(`http://18.191.171.80:3000/produtos/${produto.codProduto}/detalhes`, {
+    axios.get(`https://api.apilogicapp.lol/produtos/${produto.codProduto}/detalhes`, {
       params: {
         dataInicio: format(inicio, 'yyyy-MM-dd'),
         dataFim: format(fim, 'yyyy-MM-dd')
       }
     })
-      .then(res => setNotasFiscais(res.data.notasFiscais || []))
+      .then(res => {
+        const notas = res.data.notasFiscais || [];
+        setNotasFiscais(notas);
+        setNotasFiltradas(notas);
+      })
       .catch(err => console.error('Erro ao buscar NFs:', err))
       .finally(() => setLoading(false));
   };
@@ -39,19 +68,26 @@ export default function ProductDetailScreen({ route, navigation }) {
   );
 
   return (
-    <View style={styles.container}>
-      {/* Botão Voltar */}
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-        <Text style={styles.backButtonText}>⬅️</Text>
-      </TouchableOpacity>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>← Voltar</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Nome do Produto */}
       <View style={styles.produtoInfo}>
         <Text style={styles.produtoNome}>{produto.produto}</Text>
         <Text style={styles.produtoCodigo}>Código: {produto.codProduto}</Text>
       </View>
 
-      {/* Filtros de data */}
+      <TextInput
+        placeholder="Buscar NF por número..."
+        placeholderTextColor="#ccc"
+        value={buscaNF}
+        onChangeText={setBuscaNF}
+        style={styles.input}
+      />
+
       <View style={styles.dateContainer}>
         <TouchableOpacity style={styles.dateButton} onPress={() => setMostrandoCalendario('inicio')}>
           <Text style={styles.dateText}>
@@ -79,54 +115,71 @@ export default function ProductDetailScreen({ route, navigation }) {
               if (selectedDate) {
                 mostrandoCalendario === 'inicio' ? setInicio(selectedDate) : setFim(selectedDate);
               }
+              setMostrandoCalendario(null);
             }}
           />
-          <TouchableOpacity onPress={() => setMostrandoCalendario(null)} style={styles.okButton}>
-            <Text style={{ color: '#fff', fontWeight: 'bold' }}>OK</Text>
-          </TouchableOpacity>
         </View>
       )}
 
       {loading ? (
-        <ActivityIndicator size="large" color="#2196f3" style={{ marginTop: 20 }} />
+        <LottieView
+          source={loadingAnim}
+          autoPlay
+          loop
+          style={{ width: 120, height: 120, alignSelf: 'center', marginTop: 20 }}
+        />
       ) : (
         <FlatList
-          data={notasFiscais}
+          data={notasFiltradas}
           keyExtractor={(item, index) => `${item.nfNumero}-${index}`}
           renderItem={renderItem}
           ListEmptyComponent={<Text style={styles.semDados}>Nenhuma nota encontrada.</Text>}
           contentContainerStyle={{ paddingBottom: 20 }}
         />
-        
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121e2d', padding: 16 },
-
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+  container: {
+    flex: 1,
+    backgroundColor: '#121e2d',
+    padding: 16,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
+    gap: 12,
+  },
+  backButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#2e3e55',
+    borderRadius: 6,
   },
   backButtonText: {
-    fontSize: 22,
+    fontSize: 14,
     color: '#fff',
+    fontWeight: 'bold'
   },
-
-  produtoInfo: {
-    marginBottom: 20,
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  produtoNome: {
-    fontSize: 20,
+  titulo: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 6,
+    flexShrink: 1,
+  },
+  produtoInfo: {
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  produtoNome: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
     textAlign: 'center',
   },
   produtoCodigo: {
@@ -134,7 +187,15 @@ const styles = StyleSheet.create({
     color: '#bbb',
     textAlign: 'center',
   },
-
+  input: {
+    backgroundColor: '#1f2c40',
+    color: '#fff',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderColor: '#2e3e55',
+    borderWidth: 1,
+  },
   dateContainer: {
     flexDirection: 'row',
     gap: 8,
@@ -149,21 +210,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   dateText: { color: '#fff', textAlign: 'center' },
-
   calendarioContainer: {
     backgroundColor: '#1f2c40',
     padding: 10,
     borderRadius: 10,
     marginBottom: 10,
   },
-  okButton: {
-    marginTop: 10,
-    backgroundColor: '#2e3e55',
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-
   nfCard: {
     backgroundColor: '#1f2c40',
     padding: 10,

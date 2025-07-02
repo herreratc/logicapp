@@ -12,7 +12,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://18.191.171.80:3000/produtos')
+    fetch('https://api.apilogicapp.lol/produtos')
       .then(res => res.json())
       .then(data => setProdutos(data))
       .catch(err => console.error('Erro ao carregar produtos:', err))
